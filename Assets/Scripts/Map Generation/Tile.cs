@@ -2,7 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class Tile
+/*public class Tile
 {
     public float height;
     public int contCoreDist;
@@ -47,4 +47,4 @@ public class Tile
     {
         this.height = h;
     }
-}
+}*/

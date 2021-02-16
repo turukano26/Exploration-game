@@ -43,7 +43,13 @@ public class MapGenerator : MonoBehaviour
     float maxHeight = 0;
     float minHeight = 0;
 
-    Tile[,] Tiles;
+    //arrays to store the info per tile
+    public float[,] heightArray;
+    public int[,] contCoreDistArray;
+    public int[,] continentIDsArray;
+    public float[,] volcanismArray;
+
+
     Continent[] continents;
 
     public MeshFilter meshFilter;
@@ -74,8 +80,19 @@ public class MapGenerator : MonoBehaviour
     }
     public void CreateTiles()
     {
-        Tiles = new Tile[mapWidth, mapHeight];              //the main array for storing the Tiles
-        System.Random rnd = new System.Random(seed);
+        heightArray = new float[mapWidth, mapHeight];              //the main arrays for storing the Tiles
+        volcanismArray = new float[mapWidth, mapHeight];
+        contCoreDistArray = new int[mapWidth, mapHeight];
+        continentIDsArray = new int[mapWidth, mapHeight];
+
+        for (int i = 0; i < mapWidth; i++)
+        {
+            for (int j = 0; j < mapHeight; j++)
+            {
+                continentIDsArray[i, j] = int.MaxValue;
+            }
+        }
+                System.Random rnd = new System.Random(seed);
 
         continents = new Continent[contNum];
 
@@ -88,11 +105,12 @@ public class MapGenerator : MonoBehaviour
             bool isOcean = rnd.NextDouble() >= landRatio;
             Vector2 movement = new Vector2((float)rnd.NextDouble(), (float)rnd.NextDouble());
 
-            if (Tiles[tempx, tempy] == null)
+            if (continentIDsArray[tempx, tempy] == int.MaxValue)
             {
                 Continent c = new Continent(i, movement, isOcean);
                 continents[i] = c;
-                Tiles[tempx, tempy] = new Tile(c, 0);
+                continentIDsArray[tempx, tempy] = i;
+                contCoreDistArray[tempx, tempy] = 0;
                 nextTiles.Add(tempx + tempy * mapWidth);
                 i++;
             }
@@ -107,18 +125,19 @@ public class MapGenerator : MonoBehaviour
             int curX = curTile % mapWidth;                              //gets the x and y of the tile
             int curY = curTile / mapWidth;
 
-            Continent curCont = Tiles[curX, curY].GetContinent();
-            int curContCoreDist = Tiles[curX, curY].getContCoreDist();
+            int curContID = continentIDsArray[curX, curY];
+            int curContCoreDist = contCoreDistArray[curX, curY];
 
             for (int i = 0; i < 4; i++) //loops through each of the 4 neighbour tiles
             {
                 int newX = (((xAdd[i] + curX) % mapWidth) + mapWidth) % mapWidth; //mods it so the world loops around
                 int newY = (((yAdd[i] + curY) % mapHeight) + mapHeight) % mapHeight;
 
-                if (Tiles[newX, newY] == null)    //if the neighbour is currently empty
+                if (continentIDsArray[newX, newY] == int.MaxValue)    //if the neighbour is currently empty
                 {
                     nextTiles.Add(newX + newY * mapWidth);  //add it to the list
-                    Tiles[newX, newY] = new Tile(curCont, curContCoreDist + 1); //and give it the same continent
+                    continentIDsArray[newX, newY] = curContID;
+                    contCoreDistArray[newX, newY] = curContCoreDist + 1;
                 }
             }
         }
@@ -131,16 +150,16 @@ public class MapGenerator : MonoBehaviour
         {
             for (int j = 0; j < mapHeight; j++)
             {
-                Continent cont = Tiles[i, j].GetContinent();
+                Continent cont = continents[continentIDsArray[i, j]];
                 if (cont.getIsOcean())
                 {
-                    Tiles[i, j].height = -10;
+                    heightArray[i, j] = -10;
                 }
                 else
                 {
                     //float decrease = Mathf.InverseLerp(0, cont.GetSize(), Tiles[i, j].getContCoreDist());
                     //Tiles[i, j].height = (-20 * decrease) + 10;
-                    Tiles[i, j].height = 10;
+                    heightArray[i, j] = 10;
                 }
 
             }
@@ -157,17 +176,17 @@ public class MapGenerator : MonoBehaviour
         {
             for (int j = 0; j < mapHeight; j++)
             {
-                int curID = Tiles[i, j].getID();
+                int curID = continentIDsArray[i, j];
 
                 for (int n = 0; n < 4; n++) //loops through each of the 4 neighbour tiles
                 {
                     int newX = (((xAdd[n] + i) % mapWidth) + mapWidth) % mapWidth; //mods it so the world loops around
                     int newY = (((yAdd[n] + j) % mapHeight) + mapHeight) % mapHeight;
 
-                    if (Tiles[newX, newY].getID() != curID)
+                    if (continentIDsArray[newX, newY] != curID)
                     {
                         //if a land plate is next to an ocean one, smooth out the transition
-                        if (Tiles[newX, newY].GetContinent().isOcean != Tiles[i, j].GetContinent().isOcean)
+                        if (continents[continentIDsArray[newX, newY]].isOcean != continents[continentIDsArray[i, j]].isOcean)
                         {
                             /*for (int p = -shoreSmoothingRadius; p <= shoreSmoothingRadius; p++)
                             {
@@ -181,13 +200,13 @@ public class MapGenerator : MonoBehaviour
                                    Tiles[x, y].SetHeight(h);
                                 }
                             }*/
-                            if(!Tiles[i, j].GetContinent().isOcean) 
+                            if(!continents[continentIDsArray[i, j]].isOcean) 
                             {
                                 if (!nextTiles.Contains(i + j * mapWidth))
                                 {
                                     nextTiles.Add(i + j * mapWidth);
                                     distFromOcean[i, j] = 1;
-                                    Tiles[i, j].SetHeight(0);
+                                    heightArray[i, j] = 0;
                                 }
                             }
                         }
@@ -201,7 +220,7 @@ public class MapGenerator : MonoBehaviour
                                     int x = (((newX + p) % mapWidth) + mapWidth) % mapWidth;
                                     int y = (((newY + q) % mapHeight) + mapHeight) % mapHeight;
 
-                                    Tiles[x, y].addVolcanism(1f / (Mathf.Abs(p) + Mathf.Abs(q) + 1));
+                                    volcanismArray[x, y] += (1f / (Mathf.Abs(p) + Mathf.Abs(q) + 1));
                                 }
                             }
                         }
@@ -226,8 +245,8 @@ public class MapGenerator : MonoBehaviour
                 {
                     nextTiles.Add(newX + newY * mapWidth);  //add it to the list
                     distFromOcean[newX, newY] = distFromOcean[curX, curY] + 1;
-                    float h = Mathf.Lerp(0, Tiles[newX, newY].height, Mathf.InverseLerp(0, shoreSmoothingRadius, distFromOcean[curX, curY]));
-                    Tiles[newX, newY].SetHeight(h);
+                    float h = Mathf.Lerp(0, heightArray[newX, newY], Mathf.InverseLerp(0, shoreSmoothingRadius, distFromOcean[curX, curY]));
+                    heightArray[newX, newY] = h;
                 }
             }
         }
@@ -242,10 +261,10 @@ public class MapGenerator : MonoBehaviour
         {
             for (int j = 0; j < mapHeight; j++)
             {
-                float v1 = (perlinNeedsTectonic) ? Tiles[i, j].volcanism * tectonicImpact / 20f : 1;
-                float v2 = (ridgedNeedsTectonic) ? Tiles[i, j].volcanism * tectonicImpact / 20f : 1;
-                Tiles[i, j].IncreaseHeight(perlinMap[i, j] * perlinInfluence * v1);
-                Tiles[i, j].IncreaseHeight(ridgedMap[i, j] * ridgedInfluence * v2);
+                float v1 = (perlinNeedsTectonic) ? volcanismArray[i, j] * tectonicImpact / 20f : 1;
+                float v2 = (ridgedNeedsTectonic) ? volcanismArray[i, j] * tectonicImpact / 20f : 1;
+                heightArray[i, j] += (perlinMap[i, j] * perlinInfluence * v1);
+                heightArray[i, j] += (ridgedMap[i, j] * ridgedInfluence * v2);
             }
         }
     }
@@ -258,13 +277,13 @@ public class MapGenerator : MonoBehaviour
         {
             for (int j = 0; j < mapHeight; j++)
             {
-                if (Tiles[i, j].height > maxHeight)
+                if (heightArray[i, j] > maxHeight)
                 {
-                    maxHeight = Tiles[i, j].height;
+                    maxHeight = heightArray[i, j];
                 }
-                if (Tiles[i, j].height < minHeight)
+                if (heightArray[i, j] < minHeight)
                 {
-                    minHeight = Tiles[i, j].height;
+                    minHeight = heightArray[i, j];
                 }
             }
         }
@@ -278,7 +297,7 @@ public class MapGenerator : MonoBehaviour
             for (int j = 0; j < mapHeight; j++)
             {
                 //result[i, j] = Tiles[i, j].continent.GetSize() / ((float)20 * contNum);
-                result[i, j] = Mathf.InverseLerp(minHeight, maxHeight, Tiles[i, j].height)*20;
+                result[i, j] = Mathf.InverseLerp(minHeight, maxHeight, heightArray[i, j])*20;
                 //result[i, j] = Tiles[i, j].height;
             }
         }
