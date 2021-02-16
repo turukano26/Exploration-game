@@ -63,8 +63,8 @@ public class MapGenerator : MonoBehaviour
 
     public void GenerateMap()
     {
-        UpdateWaterSize();
-        CreateTiles();
+        Initialize();
+        MapContinents();
         CalculateBaseHeights();
         FixContinentEdges();
         AddNoise();
@@ -78,23 +78,28 @@ public class MapGenerator : MonoBehaviour
         //Render3D(HeightMap);
         display.DrawMesh(MeshGenerator.GenerateTerrainMesh(heightMap), TextureGenerator.TextureFromColourMap(colorMap, mapWidth, mapHeight));
     }
-    public void CreateTiles()
+
+    public void Initialize()
     {
-        heightArray = new float[mapWidth, mapHeight];              //the main arrays for storing the Tiles
+        water.gameObject.transform.localScale = new Vector3(-mapWidth / 10, 1, mapHeight / 10); //sets the water plane to the map size
+
+        heightArray = new float[mapWidth, mapHeight];                //the main arrays for storing the tile data
         volcanismArray = new float[mapWidth, mapHeight];
         contCoreDistArray = new int[mapWidth, mapHeight];
         continentIDsArray = new int[mapWidth, mapHeight];
 
-        for (int i = 0; i < mapWidth; i++)
+        for(int i = 0; i < mapWidth; i++)                           //sets the initial values for contIDs to int.maxvalue
         {
             for (int j = 0; j < mapHeight; j++)
             {
                 continentIDsArray[i, j] = int.MaxValue;
             }
         }
-                System.Random rnd = new System.Random(seed);
-
         continents = new Continent[contNum];
+    }
+    public void MapContinents()
+    {
+        System.Random rnd = new System.Random(seed);
 
         List<int> nextTiles = new List<int>();              //List of tiles to be processed by the while loop (stored as an int that describes its location)
 
@@ -157,8 +162,6 @@ public class MapGenerator : MonoBehaviour
                 }
                 else
                 {
-                    //float decrease = Mathf.InverseLerp(0, cont.GetSize(), Tiles[i, j].getContCoreDist());
-                    //Tiles[i, j].height = (-20 * decrease) + 10;
                     heightArray[i, j] = 10;
                 }
 
@@ -188,18 +191,6 @@ public class MapGenerator : MonoBehaviour
                         //if a land plate is next to an ocean one, smooth out the transition
                         if (continents[continentIDsArray[newX, newY]].isOcean != continents[continentIDsArray[i, j]].isOcean)
                         {
-                            /*for (int p = -shoreSmoothingRadius; p <= shoreSmoothingRadius; p++)
-                            {
-                                for (int q = -shoreSmoothingRadius + Mathf.Abs(p); q <= shoreSmoothingRadius - Mathf.Abs(p); q++)
-                                {
-                                    int x = (((newX + p) % mapWidth) + mapWidth) % mapWidth;
-                                    int y = (((newY + q) % mapHeight) + mapHeight) % mapHeight;
-
-                                   // float h = Mathf.Lerp(0, Tiles[x, y].height, 0.985f);
-                                   float h = Mathf.Lerp(0, Tiles[x, y].height, Mathf.InverseLerp(0,tectonicRadius, (Mathf.Abs(p) + Mathf.Abs(q))));
-                                   Tiles[x, y].SetHeight(h);
-                                }
-                            }*/
                             if(!continents[continentIDsArray[i, j]].isOcean) 
                             {
                                 if (!nextTiles.Contains(i + j * mapWidth))
@@ -296,9 +287,8 @@ public class MapGenerator : MonoBehaviour
         {
             for (int j = 0; j < mapHeight; j++)
             {
-                //result[i, j] = Tiles[i, j].continent.GetSize() / ((float)20 * contNum);
                 result[i, j] = Mathf.InverseLerp(minHeight, maxHeight, heightArray[i, j])*20;
-                //result[i, j] = Tiles[i, j].height;
+                //result[i, j] = heightArray[i, j];
             }
         }
         return result;
@@ -321,14 +311,9 @@ public class MapGenerator : MonoBehaviour
                         break;
                     }
                 }
-                //colorMap[y * width + x] = Color.Lerp(Color.black, Color.white, noiseMap[x, y]);
             }
         }
         return colorMap;
-    }
-    public void UpdateWaterSize()
-    {
-        water.gameObject.transform.localScale = new Vector3(-mapWidth/10, 1, mapHeight/10);
     }
 }
 [System.Serializable]
