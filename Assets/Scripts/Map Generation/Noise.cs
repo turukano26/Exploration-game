@@ -4,7 +4,7 @@ using UnityEngine;
 
 public static class Noise
 {
-	public static float[,] GenerateNoiseMap(int mapWidth, int mapHeight, int seed, float scale, int octaves, float persistance, float lacunarity, Vector2 offset, bool Ridged)
+	public static float[,] GenerateNoiseMap(int mapWidth, int mapHeight, int seed, float scale, int octaves, float persistance, float lacunarity, Vector2 offset, NoiseMapType noiseType)
 	{
 		float[,] noiseMap = new float[mapWidth, mapHeight];
 
@@ -58,41 +58,52 @@ public static class Noise
 				{
 					minNoiseHeight = noiseHeight;
 				}
-                if (Ridged)
-                {
-					noiseMap[x, y] = Mathf.Abs(noiseHeight);
-                }
-                else
-                {
-					noiseMap[x, y] = noiseHeight;
-				}
-			}
-		}
-		if (Ridged==false)
-		{
-			for (int y = 0; y < mapHeight; y++)
-			{
-				for (int x = 0; x < mapWidth; x++)
-				{
-					noiseMap[x, y] = Mathf.InverseLerp(minNoiseHeight, maxNoiseHeight, noiseMap[x, y]);
-				}
-			}
-		}
-        else
-        {
-            if(Mathf.Abs(minNoiseHeight) > maxNoiseHeight)
-            {
-				maxNoiseHeight = Mathf.Abs(minNoiseHeight);
-            }
-			for (int y = 0; y < mapHeight; y++)
-			{
-				for (int x = 0; x < mapWidth; x++)
-				{
-					noiseMap[x, y] = Mathf.InverseLerp(0, maxNoiseHeight, noiseMap[x, y]);
-				}
-			}
-		}
 
+                if (noiseType==NoiseMapType.perlin)
+                {
+					noiseMap[x, y] = noiseHeight; //soft boundary at -1 to soft boundary at 1
+                }
+                else if (noiseType == NoiseMapType.ridged)
+				{
+					noiseMap[x, y] = Mathf.Abs(noiseHeight) * -1; //soft boundary at -1 to hard boundary at 0
+				}
+				else if (noiseType == NoiseMapType.valley)
+                {
+					noiseMap[x, y] = Mathf.Abs(noiseHeight); //hard boundary at 0 to soft boundary at 1
+				}
+			}
+		}
+		if (noiseType != NoiseMapType.perlin)
+        {
+			if (Mathf.Abs(minNoiseHeight) > maxNoiseHeight)
+			{
+				maxNoiseHeight = Mathf.Abs(minNoiseHeight);
+			}
+		}
+		for (int y = 0; y < mapHeight; y++)
+		{
+			for (int x = 0; x < mapWidth; x++)
+			{
+				if (noiseType == NoiseMapType.perlin)
+                {
+					noiseMap[x, y] = Mathf.InverseLerp(minNoiseHeight, maxNoiseHeight, noiseMap[x, y]) * 2 - 1;
+				}
+				if (noiseType == NoiseMapType.ridged)
+				{
+					noiseMap[x, y] = Mathf.InverseLerp(-maxNoiseHeight, 0, noiseMap[x, y]) * 2 - 1;
+				}
+				if (noiseType == NoiseMapType.valley)
+				{
+					noiseMap[x, y] = Mathf.InverseLerp(0, maxNoiseHeight, noiseMap[x, y]) * 2 - 1;
+				}
+			}
+		}
 		return noiseMap;
 	}
+}
+public enum NoiseMapType
+{
+	perlin,
+	ridged,
+	valley
 }

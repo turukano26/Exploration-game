@@ -12,14 +12,12 @@ public class MapGenerator : MonoBehaviour
     public int contNum;
     public float landRatio;
     public float waterLevel;
+    public bool useContinentHeights;
 
     //perlin noise settings
     public NoiseMap perlinMap;
     public NoiseMap ridgedMap;
     public NoiseMap valleyMap;
-
-    //use of noise settings
-    public bool useContinentHeights;
 
     //plate edge settings
     public int tectonicRadius;
@@ -60,6 +58,7 @@ public class MapGenerator : MonoBehaviour
 
         CreatePerlinMap();
         CreateRidgedMap();
+        CreateVelleyMap();
 
         CombineHeightMaps();
 
@@ -247,17 +246,17 @@ public class MapGenerator : MonoBehaviour
 
     public void CreatePerlinMap()
     {
-        perlinMap.HeightArray = Noise.GenerateNoiseMap(mapWidth, mapHeight, rnd.Next(), perlinMap.Scale, perlinMap.Octaves, perlinMap.Persistance, perlinMap.Lacunarity, Vector2.zero, false);
+        perlinMap.HeightArray = Noise.GenerateNoiseMap(mapWidth, mapHeight, rnd.Next(), perlinMap.Scale, perlinMap.Octaves, perlinMap.Persistance, perlinMap.Lacunarity, Vector2.zero, NoiseMapType.perlin);
     }
 
     public void CreateRidgedMap()
     {
-        ridgedMap.HeightArray = Noise.GenerateNoiseMap(mapWidth, mapHeight, rnd.Next(), ridgedMap.Scale, ridgedMap.Octaves, ridgedMap.Persistance, ridgedMap.Lacunarity, Vector2.zero, false);
+        ridgedMap.HeightArray = Noise.GenerateNoiseMap(mapWidth, mapHeight, rnd.Next(), ridgedMap.Scale, ridgedMap.Octaves, ridgedMap.Persistance, ridgedMap.Lacunarity, Vector2.zero, NoiseMapType.ridged);
     }
 
     public void CreateVelleyMap()
     {
-
+        valleyMap.HeightArray = Noise.GenerateNoiseMap(mapWidth, mapHeight, rnd.Next(), valleyMap.Scale, valleyMap.Octaves, valleyMap.Persistance, valleyMap.Lacunarity, Vector2.zero, NoiseMapType.valley);
     }
 
     public void CombineHeightMaps()
@@ -265,7 +264,7 @@ public class MapGenerator : MonoBehaviour
         List<NoiseMap> heightMaps = new List<NoiseMap>();
         heightMaps.Add(ridgedMap);
         heightMaps.Add(perlinMap);
-        //heightMaps.Add(valleyMap);
+        heightMaps.Add(valleyMap);
 
         List<NoiseMap> heightMapsToAdd = new List<NoiseMap>();
         List<NoiseMap> heightMapsForVolcanism = new List<NoiseMap>();
@@ -287,13 +286,17 @@ public class MapGenerator : MonoBehaviour
         {
             for (int j = 0; j < mapHeight; j++)
             {
+                if (useContinentHeights)
+                {
+                    finalHeightArray[i,j] += contHeightArray[i, j];
+                }
                 foreach (NoiseMap map in heightMapsToAdd)
                 {
                     finalHeightArray[i, j] += map.HeightArray[i, j] * map.Influence;
                 }
                 foreach (NoiseMap map in heightMapsForVolcanism)
                 {
-                    finalHeightArray[i, j] += map.HeightArray[i, j] * map.volcanicInfluence * volcanismArray[i,j];
+                    finalHeightArray[i, j] += (map.HeightArray[i, j]+1) * map.volcanicInfluence * volcanismArray[i,j]/10f;
                 }
             }
         }
@@ -325,8 +328,8 @@ public class MapGenerator : MonoBehaviour
         {
             for (int j = 0; j < mapHeight; j++)
             {
-                result[i, j] = Mathf.InverseLerp(minHeight, maxHeight, finalHeightArray[i, j])*20;
-                //result[i, j] = heightArray[i, j];
+                //result[i, j] = Mathf.InverseLerp(minHeight, maxHeight, finalHeightArray[i, j])*20;
+                result[i, j] = finalHeightArray[i, j];
             }
         }
         return result;
