@@ -11,30 +11,19 @@ public class MapGenerator : MonoBehaviour
     public int seed;
     public int contNum;
     public float landRatio;
+    public float waterLevel;
 
     //perlin noise settings
-    public float perlinScale;
-    public int perlinOctaves;
-    public float perlinPersistance;
-    public float perlinLacunarity;
-    public float perlinInfluence;
+    public NoiseMap perlinMap;
+    public NoiseMap ridgedMap;
+    public NoiseMap valleyMap;
 
-    //ridged noise settings
-    public float ridgedScale;
-    public int ridgedOctaves;
-    public float ridgedPersistance;
-
-    [Range(1f,3f)]
-    public float ridgedLacunarity;
-    public float ridgedInfluence;
+    //use of noise settings
+    public bool useContinentHeights;
 
     //plate edge settings
-    public bool perlinNeedsTectonic;
-    public bool ridgedNeedsTectonic;
-    public float tectonicImpact;
     public int tectonicRadius;
     public int shoreSmoothingRadius;
-    public int test;
 
     //arrays used for visiting the 4 directly adjacent tiles
     readonly int[] xAdd = new int[] { 1, 0, -1, 0 };             
@@ -44,11 +33,12 @@ public class MapGenerator : MonoBehaviour
     float minHeight = 0;
 
     //arrays to store the info per tile
-    public float[,] heightArray;
+    public float[,] finalHeightArray;
     public int[,] contCoreDistArray;
     public int[,] continentIDsArray;
     public float[,] volcanismArray;
 
+    public float[,] contHeightArray;
 
     Continent[] continents;
 
@@ -61,34 +51,41 @@ public class MapGenerator : MonoBehaviour
 
     public GameObject water;
 
+    public System.Random rnd;
+
     public void GenerateMap()
     {
         Initialize();
-        MapContinents();
-        CalculateBaseHeights();
-        FixContinentEdges();
-        AddNoise();
-        RecalculateMinMax();
+        CreateContinentHeightMap();
 
-        //MapDisplay display = FindObjectOfType<MapDisplay>();
+        CreatePerlinMap();
+        CreateRidgedMap();
+
+        CombineHeightMaps();
+
+
+        RecalculateMinMax();
 
         float[,] heightMap = CreateHeightMap();
         Color[] colorMap = GenerateColorMap(heightMap);
 
-        //Render3D(HeightMap);
         display.DrawMesh(MeshGenerator.GenerateTerrainMesh(heightMap), TextureGenerator.TextureFromColourMap(colorMap, mapWidth, mapHeight));
     }
 
     public void Initialize()
     {
-        water.gameObject.transform.localScale = new Vector3(-mapWidth / 10, 1, mapHeight / 10); //sets the water plane to the map size
+        rnd = new System.Random(seed);
 
-        heightArray = new float[mapWidth, mapHeight];                //the main arrays for storing the tile data
+        water.gameObject.transform.localScale = new Vector3(-mapWidth / 10, 1, mapHeight / 10); //sets the water plane to the map size
+        water.gameObject.transform.localPosition = new Vector3(water.gameObject.transform.localPosition.x, waterLevel, water.gameObject.transform.localPosition.z);
+
+        finalHeightArray = new float[mapWidth, mapHeight];                //the main arrays for storing the tile data
         volcanismArray = new float[mapWidth, mapHeight];
         contCoreDistArray = new int[mapWidth, mapHeight];
         continentIDsArray = new int[mapWidth, mapHeight];
+        contHeightArray = new float[mapWidth, mapHeight];
 
-        for(int i = 0; i < mapWidth; i++)                           //sets the initial values for contIDs to int.maxvalue
+        for (int i = 0; i < mapWidth; i++)                           //sets the initial values for contIDs to int.maxvalue
         {
             for (int j = 0; j < mapHeight; j++)
             {
@@ -97,10 +94,15 @@ public class MapGenerator : MonoBehaviour
         }
         continents = new Continent[contNum];
     }
-    public void MapContinents()
-    {
-        System.Random rnd = new System.Random(seed);
 
+    public void CreateContinentHeightMap()
+    {
+        CreateContinents();
+        CalculateBaseHeights();
+        FixContinentEdges();
+    }
+    public void CreateContinents()
+    {
         List<int> nextTiles = new List<int>();              //List of tiles to be processed by the while loop (stored as an int that describes its location)
 
         for (int i = 0; i < contNum;)                       //creates the starting seeds randomly for each continent and adds them to the list
@@ -158,11 +160,11 @@ public class MapGenerator : MonoBehaviour
                 Continent cont = continents[continentIDsArray[i, j]];
                 if (cont.getIsOcean())
                 {
-                    heightArray[i, j] = -10;
+                    contHeightArray[i, j] = -10;
                 }
                 else
                 {
-                    heightArray[i, j] = 10;
+                    contHeightArray[i, j] = 10;
                 }
 
             }
@@ -197,7 +199,7 @@ public class MapGenerator : MonoBehaviour
                                 {
                                     nextTiles.Add(i + j * mapWidth);
                                     distFromOcean[i, j] = 1;
-                                    heightArray[i, j] = 0;
+                                    contHeightArray[i, j] = 0;
                                 }
                             }
                         }
@@ -236,30 +238,66 @@ public class MapGenerator : MonoBehaviour
                 {
                     nextTiles.Add(newX + newY * mapWidth);  //add it to the list
                     distFromOcean[newX, newY] = distFromOcean[curX, curY] + 1;
-                    float h = Mathf.Lerp(0, heightArray[newX, newY], Mathf.InverseLerp(0, shoreSmoothingRadius, distFromOcean[curX, curY]));
-                    heightArray[newX, newY] = h;
+                    float h = Mathf.Lerp(0, contHeightArray[newX, newY], Mathf.InverseLerp(0, shoreSmoothingRadius, distFromOcean[curX, curY]));
+                    contHeightArray[newX, newY] = h;
                 }
             }
         }
     }
 
-    public void AddNoise()
+    public void CreatePerlinMap()
     {
-        float[,] perlinMap = Noise.GenerateNoiseMap(mapWidth, mapHeight, seed, perlinScale, perlinOctaves, perlinPersistance, perlinLacunarity, Vector2.zero, false);
-        float[,] ridgedMap = Noise.GenerateNoiseMap(mapWidth, mapHeight, seed, ridgedScale, ridgedOctaves, ridgedPersistance, ridgedLacunarity, Vector2.zero, true);
+        perlinMap.HeightArray = Noise.GenerateNoiseMap(mapWidth, mapHeight, rnd.Next(), perlinMap.Scale, perlinMap.Octaves, perlinMap.Persistance, perlinMap.Lacunarity, Vector2.zero, false);
+    }
+
+    public void CreateRidgedMap()
+    {
+        ridgedMap.HeightArray = Noise.GenerateNoiseMap(mapWidth, mapHeight, rnd.Next(), ridgedMap.Scale, ridgedMap.Octaves, ridgedMap.Persistance, ridgedMap.Lacunarity, Vector2.zero, false);
+    }
+
+    public void CreateVelleyMap()
+    {
+
+    }
+
+    public void CombineHeightMaps()
+    {
+        List<NoiseMap> heightMaps = new List<NoiseMap>();
+        heightMaps.Add(ridgedMap);
+        heightMaps.Add(perlinMap);
+        //heightMaps.Add(valleyMap);
+
+        List<NoiseMap> heightMapsToAdd = new List<NoiseMap>();
+        List<NoiseMap> heightMapsForVolcanism = new List<NoiseMap>();
+
+        foreach (NoiseMap map in heightMaps)
+        {
+            if (map.useEverywhere)
+            {
+                heightMapsToAdd.Add(map);
+            }
+            if (map.addOnVolcanism)
+            {
+                heightMapsForVolcanism.Add(map);
+            }
+        }
+
 
         for (int i = 0; i < mapWidth; i++)
         {
             for (int j = 0; j < mapHeight; j++)
             {
-                float v1 = (perlinNeedsTectonic) ? volcanismArray[i, j] * tectonicImpact / 20f : 1;
-                float v2 = (ridgedNeedsTectonic) ? volcanismArray[i, j] * tectonicImpact / 20f : 1;
-                heightArray[i, j] += (perlinMap[i, j] * perlinInfluence * v1);
-                heightArray[i, j] += (ridgedMap[i, j] * ridgedInfluence * v2);
+                foreach (NoiseMap map in heightMapsToAdd)
+                {
+                    finalHeightArray[i, j] += map.HeightArray[i, j] * map.Influence;
+                }
+                foreach (NoiseMap map in heightMapsForVolcanism)
+                {
+                    finalHeightArray[i, j] += map.HeightArray[i, j] * map.volcanicInfluence * volcanismArray[i,j];
+                }
             }
         }
     }
-
     public void RecalculateMinMax()
     {
         maxHeight = 0;
@@ -268,13 +306,13 @@ public class MapGenerator : MonoBehaviour
         {
             for (int j = 0; j < mapHeight; j++)
             {
-                if (heightArray[i, j] > maxHeight)
+                if (finalHeightArray[i, j] > maxHeight)
                 {
-                    maxHeight = heightArray[i, j];
+                    maxHeight = finalHeightArray[i, j];
                 }
-                if (heightArray[i, j] < minHeight)
+                if (finalHeightArray[i, j] < minHeight)
                 {
-                    minHeight = heightArray[i, j];
+                    minHeight = finalHeightArray[i, j];
                 }
             }
         }
@@ -287,7 +325,7 @@ public class MapGenerator : MonoBehaviour
         {
             for (int j = 0; j < mapHeight; j++)
             {
-                result[i, j] = Mathf.InverseLerp(minHeight, maxHeight, heightArray[i, j])*20;
+                result[i, j] = Mathf.InverseLerp(minHeight, maxHeight, finalHeightArray[i, j])*20;
                 //result[i, j] = heightArray[i, j];
             }
         }
@@ -321,4 +359,21 @@ public struct TerrainColor
 {
     public Color color;
     public float height;
+}
+
+[System.Serializable]
+public class NoiseMap
+{
+    public float Scale;
+    public int Octaves;
+    public float Persistance;
+
+    [Range(1f, 3f)]
+    public float Lacunarity;
+    public float Influence;
+    public float volcanicInfluence;
+    public bool useEverywhere;
+    public bool addOnVolcanism;
+
+    public float[,] HeightArray;
 }
