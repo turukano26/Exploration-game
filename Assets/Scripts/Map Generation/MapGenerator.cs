@@ -1,6 +1,8 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using System.Diagnostics;
+using System.Threading;
 
 public class MapGenerator : MonoBehaviour
 {
@@ -51,17 +53,32 @@ public class MapGenerator : MonoBehaviour
 
     public System.Random rnd;
 
+    public Stopwatch stopwatch;
+
     public void GenerateMap()
     {
+        Stopwatch total = new Stopwatch();
+        total.Start();
+
         Initialize();
+
+        Stopwatch s = new Stopwatch();
+        s.Start();
+
         CreateContinentHeightMap();
+
+        UnityEngine.Debug.Log("total time to create continents: " + s.ElapsedMilliseconds);
+        s.Restart();
+
 
         CreatePerlinMap();
         CreateRidgedMap();
         CreateVelleyMap();
 
-        CombineHeightMaps();
+        UnityEngine.Debug.Log("total time to create noisemaps: " + s.ElapsedMilliseconds);
+        s.Restart();
 
+        CombineHeightMaps();
 
         RecalculateMinMax();
 
@@ -69,6 +86,8 @@ public class MapGenerator : MonoBehaviour
         Color[] colorMap = GenerateColorMap(heightMap);
 
         display.DrawMesh(MeshGenerator.GenerateTerrainMesh(heightMap), TextureGenerator.TextureFromColourMap(colorMap, mapWidth, mapHeight));
+
+        UnityEngine.Debug.Log("total time to do everything: " + total.ElapsedMilliseconds);
     }
 
     public void Initialize()
@@ -96,9 +115,23 @@ public class MapGenerator : MonoBehaviour
 
     public void CreateContinentHeightMap()
     {
+        Stopwatch stopwatch = new Stopwatch();
+        stopwatch.Start();
+
         CreateContinents();
+
+        UnityEngine.Debug.Log("Time taken to create continents: " + stopwatch.ElapsedMilliseconds);
+        stopwatch.Restart();
+
         CalculateBaseHeights();
+
+        UnityEngine.Debug.Log("Time taken to calculate base heights: " + stopwatch.ElapsedMilliseconds);
+        stopwatch.Restart();
+
         FixContinentEdges();
+
+        UnityEngine.Debug.Log("Time taken to fix cont edges and add volcanism: " + stopwatch.ElapsedMilliseconds);
+        stopwatch.Restart();
     }
     public void CreateContinents()
     {
@@ -126,7 +159,11 @@ public class MapGenerator : MonoBehaviour
         {
             int temp = (int)(rnd.NextDouble() * nextTiles.Count);        //picks a random tile from the list
             int curTile = nextTiles[temp];
-            nextTiles.RemoveAt(temp);                                   //and removes it from the list
+                                              //and removes it from the list
+
+            int temp2 = nextTiles[nextTiles.Count - 1];
+            nextTiles[temp] = temp2;
+            nextTiles.RemoveAt(nextTiles.Count - 1);
 
             int curX = curTile % mapWidth;                              //gets the x and y of the tile
             int curY = curTile / mapWidth;
