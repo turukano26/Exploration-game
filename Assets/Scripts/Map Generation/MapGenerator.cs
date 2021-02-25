@@ -377,13 +377,26 @@ public class MapGenerator : MonoBehaviour
         int height = noiseMap.GetLength(1);
 
         Color[] colorMap = new Color[width * height];
+
+        for (int k = 0; k < regions.Length; k++)
+        {
+            if (regions[k].height < 0)
+            {
+                regions[k].realHeight = Mathf.Lerp(waterLevel, minHeight, -regions[k].height);
+            }
+            else
+            {
+                regions[k].realHeight = Mathf.Lerp(waterLevel, maxHeight, regions[k].height);
+            }
+        }
+
         for (int y = 0; y < height; y++)
         {
             for (int x = 0; x < width; x++)
             {
                 for (int k = 0; k < regions.Length; k++)
                 {
-                    if (noiseMap[x, y] <= regions[k].height)
+                    if (noiseMap[x, y] <= regions[k].realHeight)
                     {
                         colorMap[y * width + x] = regions[k].color;
                         break;
@@ -399,6 +412,7 @@ public struct TerrainColor
 {
     public Color color;
     public float height;
+    public float realHeight;
 }
 
 [System.Serializable]
